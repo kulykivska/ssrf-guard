@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: mypy
+      - run: pytest -q
+
+  no_deps:
+    # The guard must work with nothing installed: the httpx transport is an
+    # extra, the checks are not.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install .
+      - run: |
+          python - <<'PY'
+          from ssrf_guard import check_url, is_safe, UnsafeUrlError
+          assert not is_safe("http://169.254.169.254/latest/meta-data/")
+          assert not is_safe("http://2130706433/")
+          assert not is_safe("https://api.example.com@127.0.0.1/")
+          try:
+              check_url("file:///etc/passwd")
+              raise SystemExit("should have refused")
+          except UnsafeUrlError:
+              pass
+          print("ok")
+          PY

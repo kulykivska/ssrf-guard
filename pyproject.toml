@@ -1,0 +1,56 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ssrf-guard"
+version = "0.1.0"
+description = "Refuse to fetch a URL that points inside your network - including the disguises, and on every redirect hop. No dependencies."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Yuliia Kulykivska" }]
+requires-python = ">=3.10"
+keywords = ["ssrf", "security", "url", "validation", "httpx", "webhook", "metadata-service"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Security",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+httpx = ["httpx>=0.24"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.6", "mypy>=1.11", "httpx>=0.24"]
+
+[project.urls]
+Homepage = "https://github.com/kulykivska/ssrf-guard"
+Issues = "https://github.com/kulykivska/ssrf-guard/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ssrf_guard"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 96
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "S", "PL"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "PLR2004", "SLF001"]
+
+[tool.mypy]
+files = ["src"]
+python_version = "3.10"
+strict = true
