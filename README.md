@@ -41,19 +41,36 @@ That last row is the one most libraries miss, and it is the easiest to exploit:
 pass the check with a public URL, then redirect. The guard belongs on every
 hop, not on the first one.
 
-## Every hop, through httpx
+## Every hop, through httpx, pinned to the checked address
+
+```python
+from ssrf_guard import guarded_client
+
+with guarded_client() as client:   # follows up to 5 redirects, ignores proxy env vars
+    client.get(url_from_the_feed)  # raises UnsafeUrlError on any hop that points inward
+```
+
+Or wire the transport yourself:
 
 ```python
 import httpx
 from ssrf_guard import GuardedTransport
 
-client = httpx.Client(transport=GuardedTransport(), follow_redirects=True)
-client.get(url_from_the_feed)   # raises UnsafeUrlError on any hop that points inward
+client = httpx.Client(transport=GuardedTransport(), follow_redirects=True, max_redirects=5)
 ```
 
 httpx sends each redirect as a new request through the transport, so the
-transport is the one place that sees them all. The async transport works the
-same way: `GuardedTransport(httpx.AsyncHTTPTransport())`.
+transport is the one place that sees them all. The async side works the same
+way: `guarded_async_client()`, or `GuardedTransport(httpx.AsyncHTTPTransport())`.
+
+The transport also closes DNS rebinding. It resolves the name once, inside the
+connection pool, refuses the connection if **any** returned A or AAAA record is
+non-public, and then connects to exactly those addresses. The URL keeps its
+host name, so the `Host` header, TLS SNI and certificate verification all use
+the name and not the IP. A second, different DNS answer never gets a say.
+
+If you resolve names yourself, `resolve_host(host, policy)` does the same:
+it returns the addresses you may connect to, or raises.
 
 ## What it refuses
 
@@ -85,16 +102,41 @@ check_url(candidate, policy)
 
 `allow_hosts` and `deny_hosts` match the name and every subdomain of it.
 
-## What this does not do
+## What this does and does not protect against
 
-It does not protect you from DNS rebinding. The name is resolved when it is
-checked and again when it is connected, and between those two moments the
-answer can change. Closing that means pinning the address you validated and
-connecting to it, which is a job for your HTTP stack rather than for a
-validator — this library gives you `addresses_for(host)` so you can.
+Protects against, when requests go through `GuardedTransport` over the stock
+`httpx.HTTPTransport` / `httpx.AsyncHTTPTransport` (check `transport.pinned`):
 
-It does not filter response content, and it is not a proxy allowlist. It
-answers one question: may this URL be fetched at all.
+- private, loopback, link-local (the `169.254.169.254` metadata service),
+  CGNAT, reserved and multicast addresses, including their disguised forms;
+- a name with one internal record among public ones;
+- a redirect to any of the above, on every hop, with `guarded_client` capping
+  the number of hops;
+- DNS rebinding between the check and the connect, because there is only one
+  resolution and the socket uses its answer.
+
+Does not protect against:
+
+- **Other HTTP stacks.** `check_url` and `is_safe` check a string. If you use
+  them in front of `requests`, `urllib` or a headless browser, that stack
+  resolves the name again and rebinding is still possible. Use `resolve_host`
+  and connect to what it returns.
+- **Custom inner transports.** Wrap something other than the stock httpx
+  transport and you get the URL check on every hop, but no pinning
+  (`transport.pinned` is False).
+- **Proxies.** The proxy resolves the target, not you, so nothing here can pin
+  it. `GuardedTransport` refuses a proxied `HTTPTransport`, and
+  `guarded_client` sets `trust_env=False` so `HTTP_PROXY` / `HTTPS_PROXY` are
+  ignored. If you pass `transport=` to your own `httpx.Client`, httpx already
+  ignores proxy variables; do not add `mounts=` that bypass the guard.
+- **Unix sockets** chosen with `uds=`: that path is yours, not the URL's.
+- **Response content.** It does not filter what comes back, and it is not an
+  allowlist of where you should go. It answers one question: may this
+  connection be made at all.
+
+## Changes
+
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

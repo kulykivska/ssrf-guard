@@ -11,23 +11,29 @@ from .core import (
     DEFAULT_POLICY,
     DEFAULT_SCHEMES,
     Policy,
+    Resolver,
     UnsafeUrlError,
     addresses_for,
     check_url,
     is_safe,
+    resolve_host,
 )
-from .httpx_guard import GuardedTransport
+from .httpx_guard import GuardedTransport, guarded_async_client, guarded_client
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "DEFAULT_POLICY",
     "DEFAULT_SCHEMES",
     "GuardedTransport",
     "Policy",
+    "Resolver",
     "UnsafeUrlError",
     "__version__",
     "addresses_for",
     "check_url",
+    "guarded_async_client",
+    "guarded_client",
     "is_safe",
+    "resolve_host",
 ]

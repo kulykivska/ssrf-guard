@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ssrf-guard"
-version = "0.1.0"
+version = "0.2.0"
 description = "Refuse to fetch a URL that points inside your network - including the disguises, and on every redirect hop. No dependencies."
 readme = "README.md"
 license = { text = "MIT" }
@@ -26,8 +26,8 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-httpx = ["httpx>=0.24"]
-dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.6", "mypy>=1.11", "httpx>=0.24"]
+httpx = ["httpx>=0.26"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.6", "mypy>=1.11", "httpx>=0.26"]
 
 [project.urls]
 Homepage = "https://github.com/kulykivska/ssrf-guard"

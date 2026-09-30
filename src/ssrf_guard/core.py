@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ipaddress
 import socket
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
@@ -47,6 +48,10 @@ class Policy:
 
 
 DEFAULT_POLICY = Policy()
+
+Address = ipaddress.IPv4Address | ipaddress.IPv6Address
+# Turns a host name into every address it has; swap it in tests or for a custom DNS.
+Resolver = Callable[[str], Sequence[Address]]
 
 
 def _is_blocked_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str:
@@ -117,7 +122,11 @@ def _literal(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
 
 
 def check_url(url: str, policy: Policy = DEFAULT_POLICY) -> None:
-    """Raise :class:`UnsafeUrlError` unless this URL may be fetched."""
+    """Raise :class:`UnsafeUrlError` unless this URL may be fetched.
+
+    This checks a string. The name can resolve differently by the time something
+    connects to it; the transport pins the address, this function cannot.
+    """
     parts = urlsplit(url.strip())
     scheme = parts.scheme.lower()
     if scheme not in policy.schemes:
@@ -126,7 +135,7 @@ def check_url(url: str, policy: Policy = DEFAULT_POLICY) -> None:
 
     # hostname, not netloc: userinfo is where "https://api.example.com@evil"
     # hides, and netloc would hand you the wrong host to check.
-    host = (parts.hostname or "").rstrip(".").lower()
+    host = _normalise(parts.hostname or "")
     if not host:
         raise UnsafeUrlError("no host in the URL")
 
@@ -158,6 +167,38 @@ def _check_host(host: str, policy: Policy) -> None:
         reason = _is_blocked_address(address)
         if reason:
             raise UnsafeUrlError(f"{host} resolves to {address}, a {reason} address")
+
+
+def resolve_host(
+    host: str, policy: Policy = DEFAULT_POLICY, resolver: Resolver = addresses_for
+) -> list[Address]:
+    """Resolve once and return the addresses that may be connected to.
+
+    Raises if any address is refused. Connect only to what this returns, and a
+    second, different DNS answer never gets a say. Empty means no address at all.
+    """
+    host = _normalise(host)
+    if not host:
+        raise UnsafeUrlError("no host to connect to")
+    if _matches(host, policy.deny_hosts):
+        raise UnsafeUrlError(f"{host} is on the deny list")
+    trusted = _matches(host, policy.allow_hosts) or policy.allow_private
+    if not trusted and (host in LOOPBACK_NAMES or host.endswith(".localhost")):
+        raise UnsafeUrlError(f"{host} is this machine")
+
+    literal = _literal(host)
+    found = [literal] if literal is not None else list(resolver(host))
+    if trusted:
+        return found
+    for address in found:
+        reason = _is_blocked_address(address)
+        if reason:
+            raise UnsafeUrlError(f"{host} resolves to {address}, a {reason} address")
+    return found
+
+
+def _normalise(host: str) -> str:
+    return host.strip("[]").rstrip(".").lower()
 
 
 def is_safe(url: str, policy: Policy = DEFAULT_POLICY) -> bool:
