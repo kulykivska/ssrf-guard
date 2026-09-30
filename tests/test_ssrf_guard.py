@@ -55,6 +55,11 @@ def test_the_obvious_private_addresses_are_refused(url: str) -> None:
         ("http://0x7f000001/", "the same in hex"),
         ("http://[::ffff:127.0.0.1]/", "IPv4 loopback wearing an IPv6 hat"),
         ("http://[::ffff:169.254.169.254]/", "the metadata service, same trick"),
+        ("http://127.1/", "the short legacy form"),
+        ("http://0x7f.1/", "the short form in hex"),
+        ("http://0177.0.0.1/", "dotted octal"),
+        ("http://100.100.100.200/", "carrier-grade NAT, home of a cloud metadata service"),
+        ("http://[2002:7f00:1::]/", "loopback inside a 6to4 address"),
     ],
 )
 def test_an_address_in_disguise_is_still_that_address(url: str, what: str) -> None:

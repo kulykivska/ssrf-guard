@@ -55,6 +55,11 @@ def _is_blocked_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) 
         # ::ffff:127.0.0.1 is 127.0.0.1 wearing a different hat, and a check
         # that only knows IPv4 waves it through.
         return _is_blocked_address(address.ipv4_mapped)
+    if isinstance(address, ipaddress.IPv6Address):
+        # 6to4 and Teredo also carry an IPv4 address inside the IPv6 one.
+        embedded = address.sixtofour or (address.teredo[1] if address.teredo else None)
+        if embedded is not None and _is_blocked_address(embedded):
+            return "tunnelled non-public"
     checks = (
         ("loopback", address.is_loopback),
         ("private", address.is_private),
@@ -62,6 +67,8 @@ def _is_blocked_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) 
         ("reserved", address.is_reserved),
         ("multicast", address.is_multicast),
         ("unspecified", address.is_unspecified),
+        # Catches what the named checks miss, such as 100.64.0.0/10 (CGNAT).
+        ("non-public", not address.is_global),
     )
     for name, hit in checks:
         if hit:
@@ -93,6 +100,11 @@ def _literal(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
     try:
         return ipaddress.ip_address(stripped)
     except ValueError:
+        pass
+    try:
+        # inet_aton takes the short and mixed legacy forms: 127.1, 0x7f.1, 0177.0.0.1.
+        return ipaddress.IPv4Address(socket.inet_aton(stripped))
+    except OSError:
         pass
     for base in (10, 16, 8):
         try:
